@@ -1,0 +1,9 @@
+WiFly   KEYWORD1
+send    KEYWORD2
+getResponse KEYWORD2
+openConnection  KEYWORD2
+closeConnection KEYWORD2
+isConnected KEYWORD2
+isInCommandMode KEYWORD2
+
+
