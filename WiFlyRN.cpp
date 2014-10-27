@@ -13,7 +13,7 @@ boolean WiFly::begin(Stream * serial, Stream * debug){
     _serial=serial;
     _debug=debug;
     delay(1000);
-    _serial->setTimeout(700);
+    _serial->setTimeout(1000);
 
     if(!enterCommandMode()) return false;
     if(!exitCommandMode()) return false;
@@ -144,6 +144,7 @@ boolean WiFly::openConnection(){
     _connected=true;
     if(!findInResponse("*OPEN*")){
         debug("OPEN not found"); 
+        //It may have not found OPEN but connection could still be open, look for CLOSE* clause
         isConnected();
         return false;
     }
@@ -216,27 +217,10 @@ boolean WiFly::exitCommandMode(){
 
 boolean WiFly::findInResponse(char * str){
 
-    char buffer[32];
-    _serial->readBytes(buffer, 31);
+    char buffer[16];
+    size_t buffsize = sizeof(buffer)/sizeof(char);
+    _serial->readBytes(buffer, buffsize);
     char * occurence = strstr(buffer, str);
-    _debug->print("OCCURRENCE: ");
-    _debug->println(occurence);
-    if(occurence == NULL){
-        debug("findInResponse:: match not found");
-        return false;
-    }
-    else{
-        debug("findInResponse::match found");
-        return true;
-    }
-/*
-    char buffer[32];
-    debug("ABOUT TO READ BUFFER");
-    readBuffer(buffer, 31);
-    debug("BUFFER READ");
-    char * occurence = strstr(buffer, str);
-    debug("Occurence: ");
-    debug(occurence);
     if(occurence == NULL){
         debug("WiFly::findInResponse match not found");
         return false;
@@ -245,80 +229,21 @@ boolean WiFly::findInResponse(char * str){
         debug("WiFly::findInResponse match found");
         return true;
     }
-    
-    */
 }
-
-int WiFly::readTimeout(uint16_t timeout){
-
-    int c = -1;
-    int deadline = millis()+timeout;
-    while(c==-1 && (millis()<deadline)){
-        c = _serial->read();
-    }
-    return c;
-}
-
-int WiFly::readBuffer(char * buff, size_t length){
-
-    size_t count = 0;
-    *buff='\0';
-    while (count < length) {
-        debug("WiFly::readBuffer reading a byte");
-        int c = readTimeout(1000);
-        //_debug->print("Char read : ");
-        //_debug->print(c);
-        //_debug->print("  ");
-        //_debug->println((char)c);
-        if (c < 0) break;
-        *buff++ = (char)c;
-        count++;
-    }
-    *buff++='\0';
-    return count;
-}
-
-int WiFly::readBufferUntil(char limit, char * buff, size_t length){
-
-    size_t count = 0;
-    *buff='\0';
-    while (count < length) {
-        int c = readTimeout(1000);
-        if (c < 0 || c == (int)limit) break;
-        *buff++ = (char)c;
-        count++;
-    }
-    *buff++='\0';
-    return count;
-}
-
 
 int WiFly::getResponse(char * buff, size_t length){
 
-    int timeout = 3000;
-    int deadline = millis() + timeout;
-    int count=0;
-    char ch;
-    *buff='\0';
     debug("WiFly::getResponse getting response: ");
-    return readBufferUntil('*',buff,length);
+    return _serial->readBytesUntil('*',buff,length);
 }
 
 boolean WiFly::drain(uint16_t timeout){
 
-    uint32_t deadline;
     char buffer[32];
-    int buffsize = sizeof(buffer)/sizeof(char);
+    size_t buffsize = sizeof(buffer)/sizeof(char);
 
-    if(timeout!=NULL){
-        timeout = 300;
-    }
-
-    deadline = millis()+timeout;
     debug("WiFly::drain starting drain...");
-    while(millis()<deadline)
-        while(_serial->available()>0) 
-            _serial->readBytes(buffer, buffsize);
+    _serial->readBytes(buffer, buffsize);
 
     debug("WiFly::drain end of draining!");
 }

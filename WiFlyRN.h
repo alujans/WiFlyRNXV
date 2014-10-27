@@ -25,9 +25,6 @@ class WiFly{
 
     private:
 
-        int readTimeout(uint16_t timeout);
-        int readBuffer(char * buff, size_t length);
-        int readBufferUntil(char limit, char * buff, size_t length);
         void debug(const char * m);
         boolean enterCommandMode();
         boolean exitCommandMode();
