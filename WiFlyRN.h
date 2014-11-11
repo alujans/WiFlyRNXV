@@ -10,6 +10,9 @@ class WiFly{
         WiFly();
         boolean begin(Stream * serial, Stream * debug=NULL);
         void send(const char * m);
+        void send(double f);
+        void send(int i);
+        void send(const __FlashStringHelper* str);
         void sleep();
         int getResponse(char * buff, size_t length);
         void flush();
@@ -19,9 +22,10 @@ class WiFly{
         boolean openConnection();
         boolean openConnection(const char *addr, uint16_t port=80);
         boolean closeConnection();
+        void clearAndCloseConnection();
         boolean isConnected();
         boolean isInCommandMode();
-        boolean drain(uint16_t timeout=NULL);
+        void drain(uint16_t timeout=NULL);
 
     private:
 

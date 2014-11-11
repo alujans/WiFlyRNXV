@@ -1,7 +1,6 @@
 #include "Arduino.h"
 #include "WiFlyRN.h"
 
-const char nulchar=0x0;
 
 WiFly::WiFly(){
     _connected=false;
@@ -12,8 +11,7 @@ boolean WiFly::begin(Stream * serial, Stream * debug){
 
     _serial=serial;
     _debug=debug;
-    delay(1000);
-    _serial->setTimeout(1000);
+    _serial->setTimeout(1500);
 
     if(!enterCommandMode()) return false;
     if(!exitCommandMode()) return false;
@@ -21,12 +19,10 @@ boolean WiFly::begin(Stream * serial, Stream * debug){
 }
 
 void WiFly::sleep(){
-    debug("WiFly::sleep time to rest");
     enterCommandMode();
     _commandMode=false;
     _serial->print("sleep\r");
     _serial->flush();
-    debug("WiFly::sleep good night");
     findInResponse("\0");
 }
 
@@ -39,9 +35,17 @@ void WiFly::debug(const char * m){
 
 void WiFly::send(const char * m){
     _serial->print(m);
-    debug("WiFly:: str sent to the serial: ");
-    debug(m);
-    
+}
+void WiFly::send(double f){
+    _serial->print(f);
+}
+
+void WiFly::send(int i){
+    _serial->print(i);
+}
+
+void WiFly::send(const __FlashStringHelper* str){
+    _serial->print(str);
 }
 
 void WiFly::flush(){
@@ -49,7 +53,6 @@ void WiFly::flush(){
 }
 
 void WiFly::reboot(){
-    debug("WiFly:reboot let's go from the top");
     enterCommandMode();
     _serial->print("reboot\r");
     _commandMode=false;
@@ -57,7 +60,7 @@ void WiFly::reboot(){
 }
 
 boolean WiFly::configTCPConnection(const char * ssid, int auth, const char * passwd, const char * addr, uint16_t port){
-
+/*
     //TODO: Not working, debug
     enterCommandMode();
     _serial->print("set wlan ssid ");
@@ -119,6 +122,7 @@ boolean WiFly::configTCPConnection(const char * ssid, int auth, const char * pas
     drain();
 
     return true;
+    */
 }
 
 boolean WiFly::factoryReset(){
@@ -139,32 +143,33 @@ boolean WiFly::openConnection(){
         enterCommandMode();
 
     _serial->print("open\r");
-    delay(100);
-    debug("WiFly::openConnection Opening connection... open sent");
-    _connected=true;
-    if(!findInResponse("*OPEN*")){
-        debug("OPEN not found"); 
-        //It may have not found OPEN but connection could still be open, look for CLOSE* clause
-        isConnected();
+    delay(300);
+    if(!findInResponse("*OPEN*"))
         return false;
-    }
-    debug("WiFly::openConnection Found *OPEN* clause, connection was opened");
+    _connected=true;
     return true;
 }
-boolean WiFly::openConnection(const char * addr, uint16_t port){
 
+boolean WiFly::openConnection(const char * addr, uint16_t port){
     /**TODO**/
+}
+
+void WiFly::clearAndCloseConnection(){
+    _serial->print("close\r");
+    delay(300);
+    _serial->print("exit\r");
+    delay(300);
+    drain();
+    _commandMode=false;
+    _connected=false;
 }
 
 boolean WiFly::closeConnection(){
     
     if(!isConnected()) return true;
-    
     _serial->print("close\r");
-    delay(100);
-    debug("WiFly::closeConnection Closing connection... close sent");
-    if(!findInResponse("*CLOS*")) return false;
-    debug("WiFly::closeConnection Found *CLOS* clause, connection was closed");
+    delay(300);
+    if(!findInResponse("CLOS*")) return false;
     _commandMode=false;
     _connected=false;
     return true;
@@ -174,9 +179,7 @@ boolean WiFly::closeConnection(){
 boolean WiFly::isConnected(){
 
     if(_serial->available() && _connected){
-        debug("WiFly::isConnected available data in serial buffer and connection is open");
         if(findInResponse("CLOS*")){
-            debug("WiFly::isConnected Found *CLOS* clause, connection was closed");
             _commandMode=false;
             _connected=false;
         }
@@ -191,10 +194,11 @@ boolean WiFly::isInCommandMode(){
 boolean WiFly::enterCommandMode(){
 
     if(!isInCommandMode()){
+        _serial->flush();
+        delay(400);
         _serial->print("$$$");
-        debug("WiFly::enterCommandMode Entering command mode");
-        if(!findInResponse("CMD")){debug("CMD not FOUND"); return false;}
-        debug("WiFly::enterCommandMode Found CMD clause, entered command mode");
+        delay(400);
+        if(!findInResponse("CMD")){return false;}
         _commandMode=true;
         return true;
     }
@@ -205,10 +209,8 @@ boolean WiFly::exitCommandMode(){
     
     if(isInCommandMode()){
         _serial->print("exit\r");
-        debug("WiFly::exitCommandMode Exiting command mode");
-        delay(500);
+        delay(300);
         if(!findInResponse("EXIT"))return false;
-        debug("WiFly::exitCommandMode Found EXIT clause, exited command mode");
         _commandMode=false;
         return true;
     }
@@ -217,34 +219,40 @@ boolean WiFly::exitCommandMode(){
 
 boolean WiFly::findInResponse(char * str){
 
-    char buffer[16];
+    char buffer[20];
     size_t buffsize = sizeof(buffer)/sizeof(char);
-    _serial->readBytes(buffer, buffsize);
+    int count = _serial->readBytes(buffer, buffsize);
+    buffer[count] = '\0';
+    //_debug->print("Occurence: ");
+    //_debug->println(buffer);
     char * occurence = strstr(buffer, str);
     if(occurence == NULL){
-        debug("WiFly::findInResponse match not found");
+        //_debug->print("Not found: ");
+        //_debug->println(str);
         return false;
     }
     else{
-        debug("WiFly::findInResponse match found");
         return true;
     }
 }
 
 int WiFly::getResponse(char * buff, size_t length){
-
-    debug("WiFly::getResponse getting response: ");
-    return _serial->readBytesUntil('*',buff,length);
+    int count = _serial->readBytesUntil('*',buff,length);
+    buff[count] = '\0';
+    return count;
 }
 
-boolean WiFly::drain(uint16_t timeout){
+void WiFly::drain(uint16_t timeout){
 
-    char buffer[32];
-    size_t buffsize = sizeof(buffer)/sizeof(char);
+    char aux;
+    if(!timeout)
+        timeout = 500;
 
-    debug("WiFly::drain starting drain...");
-    _serial->readBytes(buffer, buffsize);
-
-    debug("WiFly::drain end of draining!");
+    long deadline = millis() + timeout;
+    while(millis()<deadline){
+        while(_serial->available()){
+            aux = _serial->read();
+        }
+    }
 }
 
